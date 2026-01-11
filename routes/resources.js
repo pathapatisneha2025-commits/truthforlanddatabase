@@ -38,7 +38,6 @@ const upload = multer({
   },
 });
 
-
 // ===== Get all resources =====
 router.get("/all", async (req, res) => {
   try {
@@ -57,12 +56,13 @@ router.post("/add", upload.single("file"), async (req, res) => {
     const file = req.file;
     if (!file) return res.status(400).json({ error: "File is required" });
 
+    const fileExt = file.originalname.split(".").pop(); // preserve extension
+    const fileUrl = `${file.path}.${fileExt}`; // append extension to Cloudinary URL
+    const publicId = file.filename;
     const size = file.size ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : "Unknown size";
-    const fileUrl = file.path; // Cloudinary URL
-    const publicId = file.filename; // store for deletion
 
     const result = await pool.query(
-      `INSERT INTO resources (type, title, description, size, file_url, public_id) 
+      `INSERT INTO resources (type, title, description, size, file_url, public_id)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
       [type, title, description, size, fileUrl, publicId]
     );
@@ -93,9 +93,10 @@ router.put("/update/:id", upload.single("file"), async (req, res) => {
         await cloudinary.uploader.destroy(`resources/${existing.rows[0].public_id}`, { resource_type: "raw" });
       }
 
-      const size = req.file.size ? `${(req.file.size / 1024 / 1024).toFixed(2)} MB` : "Unknown size";
-      const fileUrl = req.file.path;
+      const fileExt = req.file.originalname.split(".").pop();
+      const fileUrl = `${req.file.path}.${fileExt}`;
       const publicId = req.file.filename;
+      const size = req.file.size ? `${(req.file.size / 1024 / 1024).toFixed(2)} MB` : "Unknown size";
 
       query += `, size=$${paramIndex}, file_url=$${paramIndex + 1}, public_id=$${paramIndex + 2}`;
       values.push(size, fileUrl, publicId);
