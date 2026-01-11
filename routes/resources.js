@@ -13,12 +13,13 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// ===== Multer + Cloudinary storage =====
+// ===== Multer + Cloudinary storage for raw files (PDF/DOC/DOCX) =====
 const storage = new CloudinaryStorage({
   cloudinary,
   params: {
     folder: "resources",
     allowed_formats: ["pdf", "doc", "docx"],
+    resource_type: "raw", // <--- important for non-image files
   },
 });
 
@@ -45,7 +46,7 @@ router.post("/add", upload.single("file"), async (req, res) => {
     if (!file) return res.status(400).json({ error: "File is required" });
 
     const size = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
-    const fileUrl = file.path; // Cloudinary URL
+    const fileUrl = file.path; // Cloudinary raw URL
 
     const result = await pool.query(
       `INSERT INTO resources (type, title, description, size, file_url) 
@@ -66,12 +67,24 @@ router.put("/update/:id", upload.single("file"), async (req, res) => {
     const { id } = req.params;
     const { type, title, description } = req.body;
 
+    // Fetch existing resource to delete old file if replaced
+    const existing = await pool.query("SELECT * FROM resources WHERE id=$1", [id]);
+    if (!existing.rows[0]) return res.status(404).json({ error: "Resource not found" });
+
     let query = "UPDATE resources SET type=$1, title=$2, description=$3";
     let values = [type, title, description];
 
     if (req.file) {
+      // Delete old file from Cloudinary
+      if (existing.rows[0].file_url) {
+        const publicId = existing.rows[0].file_url
+          .split("/resources/")[1]
+          .split(".")[0];
+        await cloudinary.uploader.destroy(`resources/${publicId}`, { resource_type: "raw" });
+      }
+
       const size = `${(req.file.size / 1024 / 1024).toFixed(2)} MB`;
-      const fileUrl = req.file.path; // Cloudinary URL
+      const fileUrl = req.file.path;
       query += ", size=$4, file_url=$5";
       values.push(size, fileUrl);
     }
@@ -97,10 +110,9 @@ router.delete("/delete/:id", async (req, res) => {
     // Delete file from Cloudinary
     if (resource.rows[0].file_url) {
       const publicId = resource.rows[0].file_url
-        .split("/")
-        .slice(-1)[0]
+        .split("/resources/")[1]
         .split(".")[0];
-      await cloudinary.uploader.destroy(`resources/${publicId}`);
+      await cloudinary.uploader.destroy(`resources/${publicId}`, { resource_type: "raw" });
     }
 
     await pool.query("DELETE FROM resources WHERE id=$1", [id]);
