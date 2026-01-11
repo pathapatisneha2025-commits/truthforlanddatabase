@@ -56,8 +56,7 @@ router.post("/add", upload.single("file"), async (req, res) => {
     const file = req.file;
     if (!file) return res.status(400).json({ error: "File is required" });
 
-    const fileExt = file.originalname.split(".").pop(); // preserve extension
-    const fileUrl = `${file.path}.${fileExt}`; // append extension to Cloudinary URL
+    const fileUrl = file.path; // ✅ use directly
     const publicId = file.filename;
     const size = file.size ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : "Unknown size";
 
@@ -73,6 +72,7 @@ router.post("/add", upload.single("file"), async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 // ===== Update resource =====
 router.put("/update/:id", upload.single("file"), async (req, res) => {
@@ -93,8 +93,7 @@ router.put("/update/:id", upload.single("file"), async (req, res) => {
         await cloudinary.uploader.destroy(`resources/${existing.rows[0].public_id}`, { resource_type: "raw" });
       }
 
-      const fileExt = req.file.originalname.split(".").pop();
-      const fileUrl = `${req.file.path}.${fileExt}`;
+      const fileUrl = req.file.path; // ✅ use directly, do NOT append extension
       const publicId = req.file.filename;
       const size = req.file.size ? `${(req.file.size / 1024 / 1024).toFixed(2)} MB` : "Unknown size";
 
@@ -113,6 +112,7 @@ router.put("/update/:id", upload.single("file"), async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 // ===== Delete resource =====
 router.delete("/delete/:id", async (req, res) => {
