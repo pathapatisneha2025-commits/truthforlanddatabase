@@ -19,7 +19,6 @@ const storage = new CloudinaryStorage({
   params: (req, file) => ({
     folder: "resources",
     resource_type: "raw", // crucial for non-image files
-    format: file.originalname.split(".").pop(), // pdf, doc, docx
   }),
 });
 
@@ -38,6 +37,7 @@ const upload = multer({
     }
   },
 });
+
 
 // ===== Get all resources =====
 router.get("/all", async (req, res) => {
