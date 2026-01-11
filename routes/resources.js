@@ -19,7 +19,7 @@ const storage = new CloudinaryStorage({
   params: {
     folder: "resources",
     allowed_formats: ["pdf", "doc", "docx"],
-    resource_type: "raw", // <--- important for non-image files
+    resource_type: "raw", // important for non-image files
   },
 });
 
@@ -28,9 +28,7 @@ const upload = multer({ storage });
 // ===== Get all resources =====
 router.get("/all", async (req, res) => {
   try {
-    const resources = await pool.query(
-      "SELECT * FROM resources ORDER BY id DESC"
-    );
+    const resources = await pool.query("SELECT * FROM resources ORDER BY id DESC");
     res.json(resources.rows);
   } catch (err) {
     console.error(err);
@@ -103,7 +101,6 @@ router.put("/update/:id", upload.single("file"), async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-
 
 // ===== Delete resource =====
 router.delete("/delete/:id", async (req, res) => {
