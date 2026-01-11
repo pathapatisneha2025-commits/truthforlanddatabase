@@ -16,14 +16,28 @@ cloudinary.config({
 // ===== Multer + Cloudinary storage for raw files (PDF/DOC/DOCX) =====
 const storage = new CloudinaryStorage({
   cloudinary,
-  params: {
+  params: (req, file) => ({
     folder: "resources",
-    allowed_formats: ["pdf", "doc", "docx"],
-    resource_type: "raw", // important for non-image files
-  },
+    resource_type: "raw", // crucial for non-image files
+    format: file.originalname.split(".").pop(), // pdf, doc, docx
+  }),
 });
 
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    const allowedMimes = [
+      "application/pdf",
+      "application/msword", // .doc
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
+    ];
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Invalid file type. Only PDF, DOC, DOCX allowed."));
+    }
+  },
+});
 
 // ===== Get all resources =====
 router.get("/all", async (req, res) => {
@@ -43,13 +57,14 @@ router.post("/add", upload.single("file"), async (req, res) => {
     const file = req.file;
     if (!file) return res.status(400).json({ error: "File is required" });
 
-    const size = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
-    const fileUrl = file.path; // Cloudinary raw URL
+    const size = file.size ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : "Unknown size";
+    const fileUrl = file.path; // Cloudinary URL
+    const publicId = file.filename; // store for deletion
 
     const result = await pool.query(
-      `INSERT INTO resources (type, title, description, size, file_url) 
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [type, title, description, size, fileUrl]
+      `INSERT INTO resources (type, title, description, size, file_url, public_id) 
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [type, title, description, size, fileUrl, publicId]
     );
 
     res.json(result.rows[0]);
@@ -65,7 +80,6 @@ router.put("/update/:id", upload.single("file"), async (req, res) => {
     const { id } = req.params;
     const { type, title, description } = req.body;
 
-    // Fetch existing resource
     const existing = await pool.query("SELECT * FROM resources WHERE id=$1", [id]);
     if (!existing.rows[0]) return res.status(404).json({ error: "Resource not found" });
 
@@ -73,22 +87,19 @@ router.put("/update/:id", upload.single("file"), async (req, res) => {
     let values = [type, title, description];
     let paramIndex = 4;
 
-    // If new file uploaded
     if (req.file) {
       // Delete old file from Cloudinary
-      if (existing.rows[0].file_url) {
-        const publicId = existing.rows[0].file_url
-          .split("/resources/")[1]
-          .split(".")[0];
-        await cloudinary.uploader.destroy(`resources/${publicId}`, { resource_type: "raw" });
+      if (existing.rows[0].public_id) {
+        await cloudinary.uploader.destroy(`resources/${existing.rows[0].public_id}`, { resource_type: "raw" });
       }
 
-      const size = `${(req.file.size / 1024 / 1024).toFixed(2)} MB`;
+      const size = req.file.size ? `${(req.file.size / 1024 / 1024).toFixed(2)} MB` : "Unknown size";
       const fileUrl = req.file.path;
+      const publicId = req.file.filename;
 
-      query += `, size=$${paramIndex}, file_url=$${paramIndex + 1}`;
-      values.push(size, fileUrl);
-      paramIndex += 2;
+      query += `, size=$${paramIndex}, file_url=$${paramIndex + 1}, public_id=$${paramIndex + 2}`;
+      values.push(size, fileUrl, publicId);
+      paramIndex += 3;
     }
 
     query += ` WHERE id=$${paramIndex} RETURNING *`;
@@ -110,11 +121,8 @@ router.delete("/delete/:id", async (req, res) => {
     if (!resource.rows[0]) return res.status(404).json({ error: "Resource not found" });
 
     // Delete file from Cloudinary
-    if (resource.rows[0].file_url) {
-      const publicId = resource.rows[0].file_url
-        .split("/resources/")[1]
-        .split(".")[0];
-      await cloudinary.uploader.destroy(`resources/${publicId}`, { resource_type: "raw" });
+    if (resource.rows[0].public_id) {
+      await cloudinary.uploader.destroy(`resources/${resource.rows[0].public_id}`, { resource_type: "raw" });
     }
 
     await pool.query("DELETE FROM resources WHERE id=$1", [id]);
