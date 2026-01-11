@@ -67,13 +67,15 @@ router.put("/update/:id", upload.single("file"), async (req, res) => {
     const { id } = req.params;
     const { type, title, description } = req.body;
 
-    // Fetch existing resource to delete old file if replaced
+    // Fetch existing resource
     const existing = await pool.query("SELECT * FROM resources WHERE id=$1", [id]);
     if (!existing.rows[0]) return res.status(404).json({ error: "Resource not found" });
 
     let query = "UPDATE resources SET type=$1, title=$2, description=$3";
     let values = [type, title, description];
+    let paramIndex = 4;
 
+    // If new file uploaded
     if (req.file) {
       // Delete old file from Cloudinary
       if (existing.rows[0].file_url) {
@@ -85,11 +87,13 @@ router.put("/update/:id", upload.single("file"), async (req, res) => {
 
       const size = `${(req.file.size / 1024 / 1024).toFixed(2)} MB`;
       const fileUrl = req.file.path;
-      query += ", size=$4, file_url=$5";
+
+      query += `, size=$${paramIndex}, file_url=$${paramIndex + 1}`;
       values.push(size, fileUrl);
+      paramIndex += 2;
     }
 
-    query += " WHERE id=$6 RETURNING *";
+    query += ` WHERE id=$${paramIndex} RETURNING *`;
     values.push(id);
 
     const result = await pool.query(query, values);
@@ -99,6 +103,7 @@ router.put("/update/:id", upload.single("file"), async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
 
 // ===== Delete resource =====
 router.delete("/delete/:id", async (req, res) => {
