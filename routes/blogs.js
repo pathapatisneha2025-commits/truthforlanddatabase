@@ -67,6 +67,7 @@ router.post("/add", upload.single("image"), async (req, res) => {
       date,
       read_time,
       mainDescription,
+      divider,   // ✅ NEW
       contentSections,
       content,
     } = req.body;
@@ -98,10 +99,11 @@ router.post("/add", upload.single("image"), async (req, res) => {
         image_url,
         public_id,
         main_description,
+        divider,              -- ✅ NEW FIELD
         content_sections,
         content
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
       RETURNING *`,
       [
         category,
@@ -113,6 +115,7 @@ router.post("/add", upload.single("image"), async (req, res) => {
         imageUrl,
         publicId,
         mainDescription,
+        divider || "",      // ✅ NEW VALUE
         JSON.stringify(parsedSections),
         content,
       ]
@@ -129,7 +132,6 @@ router.post("/add", upload.single("image"), async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-
 /* ================= UPDATE BLOG ================= */
 router.put("/update/:id", upload.single("image"), async (req, res) => {
   try {
@@ -141,6 +143,7 @@ router.put("/update/:id", upload.single("image"), async (req, res) => {
       date,
       read_time,
       mainDescription,
+      divider,   // ✅ NEW
       contentSections,
       content,
     } = req.body;
@@ -166,8 +169,9 @@ router.put("/update/:id", upload.single("image"), async (req, res) => {
         date=$5,
         read_time=$6,
         main_description=$7,
-        content_sections=$8,
-        content=$9
+        divider=$8,               -- ✅ NEW
+        content_sections=$9,
+        content=$10
     `;
 
     let values = [
@@ -178,13 +182,14 @@ router.put("/update/:id", upload.single("image"), async (req, res) => {
       date,
       read_time,
       mainDescription,
+      divider || "",           // ✅ NEW
       JSON.stringify(
         contentSections ? JSON.parse(contentSections) : []
       ),
       content,
     ];
 
-    let paramIndex = 10;
+    let paramIndex = 11;
 
     /* ================= IMAGE UPDATE ================= */
     if (req.file) {
@@ -218,7 +223,6 @@ router.put("/update/:id", upload.single("image"), async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-
 /* ================= DELETE BLOG ================= */
 router.delete("/delete/:id", async (req, res) => {
   try {
